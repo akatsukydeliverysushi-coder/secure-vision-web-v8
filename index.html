@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07111f"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css"><title>Secure Vision V7</title>
+</head>
+<body><main class="app">
+<header><div><span class="eyebrow">SECURE VISION</span><h1>V7</h1></div><span id="status" class="status offline">OFFLINE</span></header>
+<section class="viewer"><video id="video" autoplay muted playsinline controls></video><div id="placeholder" class="placeholder"><div class="camera-icon">◉</div><strong>Aguardando câmera</strong><span>Configure o endereço MediaMTX.</span></div></section>
+<section class="controls"><button id="connect" class="primary">Conectar</button><button id="disconnect">Desconectar</button><button id="fullscreen">Tela cheia</button><button id="sound">Ativar áudio</button></section>
+<section class="panel"><h2>Configuração</h2>
+<label>URL WHEP do MediaMTX<input id="whepUrl" value="http://127.0.0.1:8889/camera1-h264/whep" placeholder="http://SERVIDOR:8889/camera1-h264/whep"></label>
+<label>Usuário MediaMTX (opcional)<input id="user" autocomplete="username"></label>
+<label>Senha MediaMTX (opcional)<input id="pass" type="password" autocomplete="current-password"></label>
+<button id="save">Salvar configuração</button>
+<p class="note">A senha da câmera não fica no aplicativo. Ela permanece somente no servidor/MediaMTX.</p></section>
+<section class="panel"><h2>Diagnóstico</h2><pre id="log">Pronto.</pre></section>
+</main><script src="reader.js"></script><script src="app.js"></script></body></html>

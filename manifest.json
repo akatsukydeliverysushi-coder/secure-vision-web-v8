@@ -1,0 +1,9 @@
+{
+  "name": "Secure Vision V7",
+  "short_name": "Secure Vision",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "lang": "pt-BR"
+}
