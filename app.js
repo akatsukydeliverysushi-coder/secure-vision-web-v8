@@ -1,6 +1,9 @@
 let reader = null;
-const $ = (id) => document.getElementById(id);
+let reconnectTimer = null;
+let manualDisconnect = false;
+let reconnectAttempts = 0;
 
+const $ = (id) => document.getElementById(id);
 const DEFAULT_WHEP = "http://127.0.0.1:8889/camera1-h264/whep";
 
 const log = (message) => {
@@ -20,17 +23,17 @@ const setStatus = (state, text) => {
 function loadConfig() {
   try {
     const c = JSON.parse(localStorage.getItem("sv8") || "{}");
-    $("whepUrl").value = c.url || DEFAULT_WHEP;
+    const savedUrl = (c.url || "").trim();
+    $("whepUrl").value = savedUrl.startsWith("http") && !savedUrl.startsWith("URL WHEP:")
+      ? savedUrl
+      : DEFAULT_WHEP;
 
-    // Credentials are intentionally NOT restored from localStorage.
+    // Never restore or persist credentials.
     $("user").value = "";
     $("pass").value = "";
 
-    // Remove any credentials saved by previous V8 versions.
-    if (c.user || c.pass) {
-      localStorage.setItem("sv8", JSON.stringify({ url: c.url || DEFAULT_WHEP }));
-      log("Credenciais antigas removidas do navegador.");
-    }
+    // Clean legacy values and malformed URL values saved by older versions.
+    localStorage.setItem("sv8", JSON.stringify({ url: $("whepUrl").value }));
   } catch (e) {
     $("whepUrl").value = DEFAULT_WHEP;
     $("user").value = "";
@@ -39,18 +42,33 @@ function loadConfig() {
 }
 
 function saveConfig() {
-  // Only the endpoint is persisted. User/password are never stored.
-  localStorage.setItem("sv8", JSON.stringify({
-    url: $("whepUrl").value.trim() || DEFAULT_WHEP
-  }));
-  log("URL salva neste navegador. Usuário e senha não são armazenados.");
+  const url = $("whepUrl").value.trim();
+  const cleanUrl = url.replace(/^URL WHEP:\s*/i, "").trim() || DEFAULT_WHEP;
+  $("whepUrl").value = cleanUrl;
+  localStorage.setItem("sv8", JSON.stringify({ url: cleanUrl }));
+  $("user").value = "";
+  $("pass").value = "";
+  log("URL salva. Usuário e senha não são armazenados.");
 }
 
-function disconnect() {
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function destroyReader() {
   if (reader) {
     try { reader.close(); } catch (e) {}
     reader = null;
   }
+}
+
+function disconnect() {
+  manualDisconnect = true;
+  clearReconnectTimer();
+  destroyReader();
 
   const video = $("video");
   if (video) {
@@ -64,10 +82,28 @@ function disconnect() {
   setStatus("offline", "OFFLINE");
 }
 
-function connect() {
-  disconnect();
+function scheduleReconnect(reason) {
+  if (manualDisconnect || reconnectTimer) return;
 
-  const url = $("whepUrl").value.trim() || DEFAULT_WHEP;
+  reconnectAttempts++;
+  const delay = Math.min(1000 * Math.max(1, reconnectAttempts), 5000);
+  log(`${reason || "WebRTC desconectado"}. Reconectando em ${Math.round(delay / 1000)}s...`);
+  setStatus("offline", "RECONEXÃO");
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!manualDisconnect) connect(true);
+  }, delay);
+}
+
+function connect(isReconnect = false) {
+  manualDisconnect = false;
+  clearReconnectTimer();
+  destroyReader();
+
+  const rawUrl = $("whepUrl").value.trim();
+  const url = (rawUrl.replace(/^URL WHEP:\s*/i, "").trim() || DEFAULT_WHEP);
+  $("whepUrl").value = url;
 
   if (typeof MediaMTXWebRTCReader !== "function") {
     log("ERRO: reader.js não carregou.");
@@ -76,8 +112,8 @@ function connect() {
   }
 
   $("placeholder").classList.add("hidden");
-  setStatus("offline", "CONECTANDO");
-  log("Conectando ao WHEP: " + url);
+  setStatus("offline", isReconnect ? "RECONCETANDO" : "CONECTANDO");
+  log((isReconnect ? "Reconectando ao WHEP: " : "Conectando ao WHEP: ") + url);
 
   try {
     reader = new MediaMTXWebRTCReader({
@@ -86,12 +122,13 @@ function connect() {
       pass: "",
 
       onError: (error) => {
+        if (manualDisconnect) return;
         log("WebRTC: " + (error?.message || error));
-        setStatus("offline", "ERRO");
-        $("placeholder").classList.remove("hidden");
+        scheduleReconnect("Falha WebRTC");
       },
 
       onTrack: (event) => {
+        if (manualDisconnect) return;
         const stream = event.streams && event.streams[0];
         if (!stream) {
           log("WebRTC recebeu uma faixa sem MediaStream.");
@@ -102,19 +139,19 @@ function connect() {
         video.srcObject = stream;
         video.play().catch(() => {});
 
+        reconnectAttempts = 0;
         setStatus("online", "ONLINE");
         $("placeholder").classList.add("hidden");
-        log("Stream WebRTC recebido.");
+        log("Stream WebRTC recebido. Conexão ONLINE.");
       }
     });
   } catch (error) {
     log("Falha ao iniciar WebRTC: " + (error?.message || error));
-    setStatus("offline", "ERRO");
-    $("placeholder").classList.remove("hidden");
+    scheduleReconnect("Falha ao iniciar WebRTC");
   }
 }
 
-$("connect").addEventListener("click", connect);
+$("connect").addEventListener("click", () => connect(false));
 $("disconnect").addEventListener("click", disconnect);
 $("save").addEventListener("click", saveConfig);
 
@@ -130,5 +167,10 @@ $("sound").addEventListener("click", () => {
   log("Áudio ativado no navegador.");
 });
 
-window.addEventListener("beforeunload", disconnect);
+window.addEventListener("beforeunload", () => {
+  manualDisconnect = true;
+  clearReconnectTimer();
+  destroyReader();
+});
+
 loadConfig();
