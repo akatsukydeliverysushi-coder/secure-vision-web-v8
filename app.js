@@ -1,6 +1,8 @@
 let reader = null;
 const $ = (id) => document.getElementById(id);
 
+const DEFAULT_WHEP = "http://127.0.0.1:8889/camera1-h264/whep";
+
 const log = (message) => {
   const el = $("log");
   if (!el) return;
@@ -18,21 +20,30 @@ const setStatus = (state, text) => {
 function loadConfig() {
   try {
     const c = JSON.parse(localStorage.getItem("sv8") || "{}");
-    if (c.url) $("whepUrl").value = c.url;
-    if (c.user) $("user").value = c.user;
-    if (c.pass) $("pass").value = c.pass;
+    $("whepUrl").value = c.url || DEFAULT_WHEP;
+
+    // Credentials are intentionally NOT restored from localStorage.
+    $("user").value = "";
+    $("pass").value = "";
+
+    // Remove any credentials saved by previous V8 versions.
+    if (c.user || c.pass) {
+      localStorage.setItem("sv8", JSON.stringify({ url: c.url || DEFAULT_WHEP }));
+      log("Credenciais antigas removidas do navegador.");
+    }
   } catch (e) {
-    log("Não foi possível ler a configuração salva.");
+    $("whepUrl").value = DEFAULT_WHEP;
+    $("user").value = "";
+    $("pass").value = "";
   }
 }
 
 function saveConfig() {
+  // Only the endpoint is persisted. User/password are never stored.
   localStorage.setItem("sv8", JSON.stringify({
-    url: $("whepUrl").value.trim(),
-    user: $("user").value,
-    pass: $("pass").value
+    url: $("whepUrl").value.trim() || DEFAULT_WHEP
   }));
-  log("Configuração salva neste navegador.");
+  log("URL salva neste navegador. Usuário e senha não são armazenados.");
 }
 
 function disconnect() {
@@ -56,12 +67,7 @@ function disconnect() {
 function connect() {
   disconnect();
 
-  const url = $("whepUrl").value.trim();
-
-  if (!url) {
-    log("Informe a URL WHEP.");
-    return;
-  }
+  const url = $("whepUrl").value.trim() || DEFAULT_WHEP;
 
   if (typeof MediaMTXWebRTCReader !== "function") {
     log("ERRO: reader.js não carregou.");
@@ -76,8 +82,8 @@ function connect() {
   try {
     reader = new MediaMTXWebRTCReader({
       url,
-      user: $("user").value,
-      pass: $("pass").value,
+      user: "",
+      pass: "",
 
       onError: (error) => {
         log("WebRTC: " + (error?.message || error));
@@ -87,7 +93,6 @@ function connect() {
 
       onTrack: (event) => {
         const stream = event.streams && event.streams[0];
-
         if (!stream) {
           log("WebRTC recebeu uma faixa sem MediaStream.");
           return;
@@ -126,5 +131,4 @@ $("sound").addEventListener("click", () => {
 });
 
 window.addEventListener("beforeunload", disconnect);
-
 loadConfig();
