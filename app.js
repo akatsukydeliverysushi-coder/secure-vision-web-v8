@@ -6,11 +6,17 @@ let reconnectAttempts = 0;
 const $ = (id) => document.getElementById(id);
 const DEFAULT_WHEP = "http://127.0.0.1:8889/camera1-h264/whep";
 
+const normalizeWhepUrl = (value) => {
+  let url = String(value || "").trim();
+  url = url.replace(/^URL\s*WHEP\s*:\s*/i, "").trim();
+  url = url.replace(/^URL\s*WHEP\s*/i, "").trim();
+  return url.startsWith("http://") || url.startsWith("https://") ? url : DEFAULT_WHEP;
+};
+
 const log = (message) => {
   const el = $("log");
   if (!el) return;
-  el.textContent =
-    `[${new Date().toLocaleTimeString()}] ${message}\n` + el.textContent;
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n` + el.textContent;
 };
 
 const setStatus = (state, text) => {
@@ -23,17 +29,11 @@ const setStatus = (state, text) => {
 function loadConfig() {
   try {
     const c = JSON.parse(localStorage.getItem("sv8") || "{}");
-    const savedUrl = (c.url || "").trim();
-    $("whepUrl").value = savedUrl.startsWith("http") && !savedUrl.startsWith("URL WHEP:")
-      ? savedUrl
-      : DEFAULT_WHEP;
-
-    // Never restore or persist credentials.
+    const cleanUrl = normalizeWhepUrl(c.url);
+    $("whepUrl").value = cleanUrl;
     $("user").value = "";
     $("pass").value = "";
-
-    // Clean legacy values and malformed URL values saved by older versions.
-    localStorage.setItem("sv8", JSON.stringify({ url: $("whepUrl").value }));
+    localStorage.setItem("sv8", JSON.stringify({ url: cleanUrl }));
   } catch (e) {
     $("whepUrl").value = DEFAULT_WHEP;
     $("user").value = "";
@@ -42,8 +42,7 @@ function loadConfig() {
 }
 
 function saveConfig() {
-  const url = $("whepUrl").value.trim();
-  const cleanUrl = url.replace(/^URL WHEP:\s*/i, "").trim() || DEFAULT_WHEP;
+  const cleanUrl = normalizeWhepUrl($("whepUrl").value);
   $("whepUrl").value = cleanUrl;
   localStorage.setItem("sv8", JSON.stringify({ url: cleanUrl }));
   $("user").value = "";
@@ -69,27 +68,22 @@ function disconnect() {
   manualDisconnect = true;
   clearReconnectTimer();
   destroyReader();
-
   const video = $("video");
   if (video) {
     video.pause();
     video.srcObject = null;
   }
-
   const placeholder = $("placeholder");
   if (placeholder) placeholder.classList.remove("hidden");
-
   setStatus("offline", "OFFLINE");
 }
 
 function scheduleReconnect(reason) {
   if (manualDisconnect || reconnectTimer) return;
-
   reconnectAttempts++;
   const delay = Math.min(1000 * Math.max(1, reconnectAttempts), 5000);
   log(`${reason || "WebRTC desconectado"}. Reconectando em ${Math.round(delay / 1000)}s...`);
   setStatus("offline", "RECONEXÃO");
-
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     if (!manualDisconnect) connect(true);
@@ -100,9 +94,7 @@ function connect(isReconnect = false) {
   manualDisconnect = false;
   clearReconnectTimer();
   destroyReader();
-
-  const rawUrl = $("whepUrl").value.trim();
-  const url = (rawUrl.replace(/^URL WHEP:\s*/i, "").trim() || DEFAULT_WHEP);
+  const url = normalizeWhepUrl($("whepUrl").value);
   $("whepUrl").value = url;
 
   if (typeof MediaMTXWebRTCReader !== "function") {
@@ -112,7 +104,7 @@ function connect(isReconnect = false) {
   }
 
   $("placeholder").classList.add("hidden");
-  setStatus("offline", isReconnect ? "RECONCETANDO" : "CONECTANDO");
+  setStatus("offline", isReconnect ? "RECONECTANDO" : "CONECTANDO");
   log((isReconnect ? "Reconectando ao WHEP: " : "Conectando ao WHEP: ") + url);
 
   try {
@@ -120,13 +112,11 @@ function connect(isReconnect = false) {
       url,
       user: "",
       pass: "",
-
       onError: (error) => {
         if (manualDisconnect) return;
         log("WebRTC: " + (error?.message || error));
         scheduleReconnect("Falha WebRTC");
       },
-
       onTrack: (event) => {
         if (manualDisconnect) return;
         const stream = event.streams && event.streams[0];
@@ -134,11 +124,9 @@ function connect(isReconnect = false) {
           log("WebRTC recebeu uma faixa sem MediaStream.");
           return;
         }
-
         const video = $("video");
         video.srcObject = stream;
         video.play().catch(() => {});
-
         reconnectAttempts = 0;
         setStatus("online", "ONLINE");
         $("placeholder").classList.add("hidden");
