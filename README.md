@@ -1,16 +1,27 @@
-# Secure Vision V7 — PWA WebRTC
+# Secure Vision V8 — PWA WebRTC
 
+Fluxo:
 Câmera RTSP/H.265 → FFmpeg H.264 → MediaMTX → WHEP/WebRTC → navegador.
 
-Para máxima compatibilidade, use H.264 Baseline e `-bf 0`.
+## Teste local
 
-Com o MediaMTX rodando, o FFmpeg pode publicar no segundo caminho:
+1. Inicie o MediaMTX.
+2. Execute `start-h264.bat`.
+3. Execute `start-local.bat`.
+4. Abra `http://127.0.0.1:8080`.
+5. A URL WHEP padrão é:
+   `http://127.0.0.1:8889/camera1-h264/whep`
 
-```bat
-"C:\Program Files\Agent\dlls\x64\ffmpeg.exe" -rtsp_transport tcp -i rtsp://127.0.0.1:8554/camera1 -map 0:v:0 -c:v libx264 -preset veryfast -tune zerolatency -profile:v baseline -level 3.1 -pix_fmt yuv420p -bf 0 -an -f rtsp rtsp://127.0.0.1:8554/camera1-h264
-```
+## Arquivos
 
-O app usa:
-`http://127.0.0.1:8889/camera1-h264/whep`
+- `index.html` — interface.
+- `app.js` — controles e conexão.
+- `reader.js` — cliente WHEP/WebRTC.
+- `style.css` — visual.
+- `start-h264.bat` — conversão H.265 → H.264 com reinício automático.
+- `start-local.bat` — servidor HTTP local.
 
-Não publique a senha da câmera no GitHub. Em GitHub Pages HTTPS, um MediaMTX HTTP local pode ser bloqueado por mixed content; para acesso remoto use HTTPS/reverse proxy ou VPN.
+## Segurança
+
+Não publique a URL RTSP, usuário ou senha da câmera no GitHub.
+Em GitHub Pages HTTPS, um endpoint HTTP local pode ser bloqueado por mixed content. Para acesso remoto, use HTTPS no endpoint WHEP e configure ICE/STUN/TURN quando necessário.
